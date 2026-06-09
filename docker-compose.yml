@@ -1,0 +1,21 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      # Optional: enables GIF search in the reaction picker (free key from developers.giphy.com)
+      GIPHY_API_KEY: ${GIPHY_API_KEY:-}
+    # No external port needed — nginx proxies to it
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
