@@ -1,7 +1,19 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 WORKDIR /app
-COPY server/package.json ./
-RUN npm install --omit=dev
-COPY server/src ./src
+COPY package.json package-lock.json ./
+COPY shared/package.json shared/
+COPY server/package.json server/
+COPY client/package.json client/
+RUN npm ci --workspace=server --ignore-scripts
+COPY shared/ shared/
+COPY server/ server/
+RUN npm run build --workspace=server
+
+# Runtime image: the server is a single self-contained bundle, no node_modules.
+FROM node:20-alpine
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=builder /app/server/dist/index.cjs ./index.cjs
+USER node
 EXPOSE 3001
-CMD ["node", "src/index.js"]
+CMD ["node", "index.cjs"]

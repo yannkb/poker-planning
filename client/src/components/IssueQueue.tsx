@@ -1,16 +1,28 @@
 import { useState } from 'react'
-import { useI18n } from '../lib/i18n.jsx'
+import type { Issue } from 'planning-poker-shared'
+import { useI18n } from '../lib/i18n'
 
-export default function IssueQueue({ issues, currentIssueId, isFacilitator, onAddIssue, onSelectIssue, onSetEstimate }) {
+interface IssueQueueProps {
+  issues: Issue[]
+  currentIssueId: string | null
+  isFacilitator: boolean
+  onAddIssue: (title: string) => void
+  onSelectIssue: (issueId: string) => void
+  onSetEstimate: (issueId: string, estimate: string) => void
+}
+
+export default function IssueQueue({
+  issues, currentIssueId, isFacilitator, onAddIssue, onSelectIssue, onSetEstimate,
+}: IssueQueueProps) {
   const { t } = useI18n()
   const [newTitle, setNewTitle] = useState('')
   const [adding, setAdding] = useState(false)
 
-  function handleAdd(e) {
+  function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    const t = newTitle.trim()
-    if (!t) return
-    onAddIssue(t)
+    const title = newTitle.trim()
+    if (!title) return
+    onAddIssue(title)
     setNewTitle('')
     setAdding(false)
   }
@@ -69,12 +81,20 @@ export default function IssueQueue({ issues, currentIssueId, isFacilitator, onAd
   )
 }
 
-function IssueRow({ issue, isActive, isFacilitator, onSelect, onSetEstimate }) {
+interface IssueRowProps {
+  issue: Issue
+  isActive: boolean
+  isFacilitator: boolean
+  onSelect: () => void
+  onSetEstimate: (issueId: string, estimate: string) => void
+}
+
+function IssueRow({ issue, isActive, isFacilitator, onSelect, onSetEstimate }: IssueRowProps) {
   const { t } = useI18n()
   const [editing, setEditing] = useState(false)
   const [estValue, setEstValue] = useState(issue.estimate ?? '')
 
-  function handleEstimate(e) {
+  function handleEstimate(e: React.FormEvent) {
     e.preventDefault()
     onSetEstimate(issue.id, estValue)
     setEditing(false)
@@ -96,14 +116,20 @@ function IssueRow({ issue, isActive, isFacilitator, onSelect, onSetEstimate }) {
         </span>
         {issue.estimate !== null ? (
           <span
-            onClick={(e) => { e.stopPropagation(); if (isFacilitator) setEditing(true) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (isFacilitator) setEditing(true)
+            }}
             className="text-xs font-bold bg-brand-600/30 text-brand-300 border border-brand-600/40 px-2 py-0.5 rounded cursor-pointer"
           >
             {issue.estimate}
           </span>
         ) : isFacilitator && isActive ? (
           <button
-            onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              setEditing(true)
+            }}
             className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
           >
             {t('set')}
@@ -120,8 +146,16 @@ function IssueRow({ issue, isActive, isFacilitator, onSelect, onSetEstimate }) {
             placeholder={t('estimatePh')}
             className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-brand-500"
           />
-          <button type="submit" className="text-xs bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-500">{t('save')}</button>
-          <button type="button" onClick={() => setEditing(false)} className="text-xs text-slate-400 hover:text-slate-200 px-1">✕</button>
+          <button type="submit" className="text-xs bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-500">
+            {t('save')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="text-xs text-slate-400 hover:text-slate-200 px-1"
+          >
+            ✕
+          </button>
         </form>
       )}
     </div>

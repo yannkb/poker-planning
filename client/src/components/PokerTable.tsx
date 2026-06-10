@@ -1,8 +1,20 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { gifUrl, THROWABLE_EMOJIS } from '../lib/reactions.js'
-import { MEME_QUOTES, RESULT_QUIPS, pickFrom, useI18n } from '../lib/i18n.jsx'
+import {
+  lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState,
+  type CSSProperties, type ReactNode,
+} from 'react'
+import {
+  HIDDEN_VOTE,
+  summarizeVotes,
+  type ClientParticipant,
+  type EmojiThrownEvent,
+  type GifReactionEvent,
+  type Issue,
+  type VoteSummary,
+} from 'planning-poker-shared'
+import { gifUrl, THROWABLE_EMOJIS } from '../lib/reactions'
+import { MEME_QUOTES, RESULT_QUIPS, pickFrom, useI18n, type QuipCategory } from '../lib/i18n'
 
-const EmojiPickerPanel = lazy(() => import('./EmojiPickerPanel.jsx'))
+const EmojiPickerPanel = lazy(() => import('./EmojiPickerPanel'))
 
 // Seats are placed on an ellipse; "me" always sits at the bottom center.
 const ELLIPSE_RX = 42
@@ -11,21 +23,57 @@ const ELLIPSE_RY = 38
 const RECENT_EMOJI_KEY = 'pp-recent-emojis'
 const MAX_RECENT_EMOJIS = 3
 
-function useIsDesktop() {
+function useIsDesktop(): boolean {
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 640px)').matches)
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 640px)')
-    const onChange = (e) => setIsDesktop(e.matches)
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [])
   return isDesktop
 }
 
-function avatarColor(name) {
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360
-  return `hsl(${h} 55% 42%)`
+function avatarColor(name: string): string {
+  let hue = 0
+  for (let i = 0; i < name.length; i++) hue = (hue * 31 + name.charCodeAt(i)) % 360
+  return `hsl(${hue} 55% 42%)`
+}
+
+function loadRecentEmojis(): string[] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(RECENT_EMOJI_KEY) ?? '[]')
+    return Array.isArray(stored)
+      ? stored.filter((e): e is string => typeof e === 'string').slice(0, MAX_RECENT_EMOJIS)
+      : []
+  } catch {
+    return []
+  }
+}
+
+interface SeatPosition {
+  style: CSSProperties | undefined
+  popoverBelow: boolean
+}
+
+interface PokerTableProps {
+  participants: ClientParticipant[]
+  myId: string | null
+  isVoting: boolean
+  isRevealed: boolean
+  isFacilitator: boolean
+  currentIssue: Issue | null
+  hasIssues: boolean
+  votedCount: number
+  voterCount: number
+  roundSeed: number
+  onReveal: () => void
+  onNewRound: () => void
+  onKick: (targetId: string) => void
+  onThrowEmoji: (targetId: string, emoji: string) => void
+  flyingEmojis: EmojiThrownEvent[]
+  onEmojiDone: (id: string) => void
+  gifBubbles: Record<string, GifReactionEvent>
 }
 
 export default function PokerTable({
@@ -35,33 +83,39 @@ export default function PokerTable({
   onThrowEmoji,
   flyingEmojis, onEmojiDone,
   gifBubbles,
-}) {
+}: PokerTableProps) {
   const { t } = useI18n()
-  const containerRef = useRef(null)
-  const seatRefs = useRef(new Map())
-  const [hitSeats, setHitSeats] = useState(() => new Set())
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const seatRefs = useRef(new Map<string, HTMLDivElement>())
+  const [hitSeats, setHitSeats] = useState<ReadonlySet<string>>(() => new Set())
   // Clicking a teammate's seat opens an emoji flyout above them
-  const [flyoutTargetId, setFlyoutTargetId] = useState(null)
-  const [fullPickerTargetId, setFullPickerTargetId] = useState(null)
+  const [flyoutTargetId, setFlyoutTargetId] = useState<string | null>(null)
+  const [fullPickerTargetId, setFullPickerTargetId] = useState<string | null>(null)
   // Emojis picked from the full picker replace the tail of the quick row
-  const [recentEmojis, setRecentEmojis] = useState(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(RECENT_EMOJI_KEY) ?? '[]')
-      return Array.isArray(stored)
-        ? stored.filter((e) => typeof e === 'string').slice(0, MAX_RECENT_EMOJIS)
-        : []
-    } catch {
-      return []
-    }
-  })
+  const [recentEmojis, setRecentEmojis] = useState<string[]>(loadRecentEmojis)
   const isDesktop = useIsDesktop()
 
-  const quickEmojis = useMemo(() => [
-    ...THROWABLE_EMOJIS.slice(0, THROWABLE_EMOJIS.length - recentEmojis.length),
-    ...[...recentEmojis].reverse(),
-  ], [recentEmojis])
+  useEffect(() => {
+    if (!flyoutTargetId && !fullPickerTargetId) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setFlyoutTargetId(null)
+        setFullPickerTargetId(null)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [flyoutTargetId, fullPickerTargetId])
 
-  function addRecentEmoji(emoji) {
+  const quickEmojis = useMemo(
+    () => [
+      ...THROWABLE_EMOJIS.slice(0, THROWABLE_EMOJIS.length - recentEmojis.length),
+      ...[...recentEmojis].reverse(),
+    ],
+    [recentEmojis],
+  )
+
+  function addRecentEmoji(emoji: string) {
     if (THROWABLE_EMOJIS.includes(emoji)) return
     setRecentEmojis((prev) => {
       const next = [emoji, ...prev.filter((e) => e !== emoji)].slice(0, MAX_RECENT_EMOJIS)
@@ -74,25 +128,6 @@ export default function PokerTable({
     })
   }
 
-  useEffect(() => {
-    if (!flyoutTargetId && !fullPickerTargetId) return
-    const close = () => {
-      setFlyoutTargetId(null)
-      setFullPickerTargetId(null)
-    }
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') close()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [flyoutTargetId, fullPickerTargetId])
-
-  // Deliberately keeps the flyout/picker open so you can spam-throw;
-  // outside click, Escape, or re-clicking the seat closes it.
-  function throwAt(targetId, emoji) {
-    onThrowEmoji(targetId, emoji)
-  }
-
   // Rotate so I'm first (bottom center seat)
   const ordered = useMemo(() => {
     const idx = participants.findIndex((p) => p.id === myId)
@@ -100,22 +135,24 @@ export default function PokerTable({
     return [...participants.slice(idx), ...participants.slice(0, idx)]
   }, [participants, myId])
 
-  const registerSeat = useCallback((id, el) => {
+  const registerSeat = useCallback((id: string, el: HTMLDivElement | null) => {
     if (el) seatRefs.current.set(id, el)
     else seatRefs.current.delete(id)
   }, [])
 
-  const getSeatCenter = useCallback((participantId) => {
+  const getSeatCenter = useCallback((participantId: string): { x: number; y: number } | null => {
     const el = seatRefs.current.get(participantId)
     const container = containerRef.current
-    if (!container) return null
-    const cr = container.getBoundingClientRect()
-    if (!el) return null
-    const er = el.getBoundingClientRect()
-    return { x: er.left + er.width / 2 - cr.left, y: er.top + er.height / 2 - cr.top }
+    if (!el || !container) return null
+    const seatRect = el.getBoundingClientRect()
+    const containerRect = container.getBoundingClientRect()
+    return {
+      x: seatRect.left + seatRect.width / 2 - containerRect.left,
+      y: seatRect.top + seatRect.height / 2 - containerRect.top,
+    }
   }, [])
 
-  const markHit = useCallback((participantId) => {
+  const markHit = useCallback((participantId: string) => {
     setHitSeats((prev) => new Set(prev).add(participantId))
     setTimeout(() => {
       setHitSeats((prev) => {
@@ -126,17 +163,10 @@ export default function PokerTable({
     }, 600)
   }, [])
 
+  // Deliberately keeps the flyout/picker open so you can spam-throw;
+  // outside click, Escape, or re-clicking the seat closes it.
   const seats = ordered.map((p, i) => {
-    const angle = Math.PI / 2 + (i / ordered.length) * Math.PI * 2
-    const topPct = 50 + ELLIPSE_RY * Math.sin(angle)
-    const style = isDesktop
-      ? {
-          left: `${50 + ELLIPSE_RX * Math.cos(angle)}%`,
-          top: `${topPct}%`,
-        }
-      : undefined
-    // Popovers on top-half seats would clip under the header — open them downward
-    const popoverBelow = isDesktop && topPct < 50
+    const { style, popoverBelow } = seatPosition(i, ordered.length, isDesktop)
     return (
       <Seat
         key={p.id}
@@ -148,9 +178,9 @@ export default function PokerTable({
         flyoutOpen={flyoutTargetId === p.id}
         onToggleFlyout={() => {
           setFullPickerTargetId(null)
-          setFlyoutTargetId((cur) => (cur === p.id ? null : p.id))
+          setFlyoutTargetId((current) => (current === p.id ? null : p.id))
         }}
-        onPickEmoji={(emoji) => throwAt(p.id, emoji)}
+        onPickEmoji={(emoji) => onThrowEmoji(p.id, emoji)}
         onMoreEmojis={() => {
           setFlyoutTargetId(null)
           setFullPickerTargetId(p.id)
@@ -229,7 +259,7 @@ export default function PokerTable({
             >
               <EmojiPickerPanel
                 onSelect={(emoji) => {
-                  throwAt(fullPickerTargetId, emoji)
+                  onThrowEmoji(fullPickerTargetId, emoji)
                   addRecentEmoji(emoji)
                   // Close the big picker but reopen the quick flyout for spamming
                   setFlyoutTargetId(fullPickerTargetId)
@@ -244,35 +274,61 @@ export default function PokerTable({
   )
 }
 
-function pickResultQuip(quips, { consensus, votes, numeric, avg }, seed) {
-  let category = 'default'
-  if (consensus) category = 'consensus'
-  else if (votes.length > 0 && votes.every((p) => p.vote === '☕')) category = 'coffee'
-  else if (votes.some((p) => p.vote === '?')) category = 'mystery'
-  else if (
-    numeric.length > 1 &&
-    (Math.min(...numeric) === 0 ? Math.max(...numeric) >= 8 : Math.max(...numeric) / Math.min(...numeric) >= 4)
-  ) category = 'bigSpread'
-  else if (avg !== null && avg >= 21) category = 'high'
-  else if (avg !== null && avg <= 3) category = 'low'
-  return pickFrom(quips[category], seed)
+function seatPosition(index: number, count: number, isDesktop: boolean): SeatPosition {
+  if (!isDesktop) return { style: undefined, popoverBelow: false }
+  const angle = Math.PI / 2 + (index / count) * Math.PI * 2
+  const topPct = 50 + ELLIPSE_RY * Math.sin(angle)
+  return {
+    style: {
+      left: `${50 + ELLIPSE_RX * Math.cos(angle)}%`,
+      top: `${topPct}%`,
+    },
+    // Popovers on top-half seats would clip under the header — open them downward
+    popoverBelow: topPct < 50,
+  }
+}
+
+function pickQuipCategory({ consensus, numeric, average, counts }: VoteSummary, votes: string[]): QuipCategory {
+  if (consensus) return 'consensus'
+  if (votes.length > 0 && votes.every((v) => v === '☕')) return 'coffee'
+  if (counts['?']) return 'mystery'
+  if (numeric.length > 1) {
+    const min = Math.min(...numeric)
+    const max = Math.max(...numeric)
+    if (min === 0 ? max >= 8 : max / min >= 4) return 'bigSpread'
+  }
+  if (average !== null && average >= 21) return 'high'
+  if (average !== null && average <= 3) return 'low'
+  return 'default'
+}
+
+interface TableCenterProps {
+  currentIssue: Issue | null
+  hasIssues: boolean
+  roundSeed: number
+  isVoting: boolean
+  isRevealed: boolean
+  isFacilitator: boolean
+  votedCount: number
+  voterCount: number
+  participants: ClientParticipant[]
+  onReveal: () => void
+  onNewRound: () => void
 }
 
 function TableCenter({
   currentIssue, hasIssues, isVoting, isRevealed, isFacilitator,
   votedCount, voterCount, participants, roundSeed, onReveal, onNewRound,
-}) {
+}: TableCenterProps) {
   const { t, lang } = useI18n()
-  const votes = participants.filter((p) => !p.isObserver && p.vote && p.vote !== '🂠')
-  const numeric = votes.map((p) => parseFloat(p.vote)).filter((v) => !isNaN(v))
-  const avg = numeric.length
-    ? Math.round((numeric.reduce((a, b) => a + b, 0) / numeric.length) * 10) / 10
-    : null
-  const consensus = votes.length > 1 && new Set(votes.map((p) => p.vote)).size === 1
+  const votes = participants
+    .filter((p) => !p.isObserver && p.vote !== null && p.vote !== HIDDEN_VOTE)
+    .map((p) => p.vote as string)
+  const summary = summarizeVotes(votes)
 
-  const memeQuote = pickFrom(MEME_QUOTES[lang] ?? MEME_QUOTES.en, roundSeed)
+  const memeQuote = pickFrom(MEME_QUOTES[lang], roundSeed)
   const resultQuip = isRevealed
-    ? pickResultQuip(RESULT_QUIPS[lang] ?? RESULT_QUIPS.en, { consensus, votes, numeric, avg }, roundSeed)
+    ? pickFrom(RESULT_QUIPS[lang][pickQuipCategory(summary, votes)], roundSeed)
     : null
 
   return (
@@ -295,18 +351,16 @@ function TableCenter({
         </div>
       )}
 
-      {isVoting && (
-        <p className="text-xs italic text-emerald-200/50 mt-2">{memeQuote}</p>
-      )}
+      {isVoting && <p className="text-xs italic text-emerald-200/50 mt-2">{memeQuote}</p>}
 
       {isRevealed && (
         <div className="mt-2 flex items-center justify-center gap-3 flex-wrap">
-          {avg !== null && (
+          {summary.average !== null && (
             <span className="text-2xl font-bold text-brand-300">
-              {avg} <span className="text-xs font-normal text-slate-400">{t('avg')}</span>
+              {summary.average} <span className="text-xs font-normal text-slate-400">{t('avg')}</span>
             </span>
           )}
-          {consensus && (
+          {summary.consensus && (
             <span className="text-emerald-400 bg-emerald-400/10 border border-emerald-400/30 px-2.5 py-0.5 rounded-full text-xs font-medium">
               {t('consensus')}
             </span>
@@ -335,27 +389,44 @@ function TableCenter({
           {t('newRound')}
         </button>
       )}
-      {!isFacilitator && isVoting && (
-        <p className="text-xs text-slate-500 mt-2">{t('waitingHost')}</p>
-      )}
+      {!isFacilitator && isVoting && <p className="text-xs text-slate-500 mt-2">{t('waitingHost')}</p>}
     </div>
   )
+}
+
+interface SeatProps {
+  p: ClientParticipant
+  isMe: boolean
+  isRevealed: boolean
+  isFacilitator: boolean
+  onKick: (targetId: string) => void
+  flyoutOpen: boolean
+  onToggleFlyout: () => void
+  onPickEmoji: (emoji: string) => void
+  onMoreEmojis: () => void
+  quickEmojis: string[]
+  hit: boolean
+  gif: GifReactionEvent | undefined
+  popoverBelow: boolean
+  refCb: (el: HTMLDivElement | null) => void
+  style: CSSProperties | undefined
+  floating: boolean
 }
 
 function Seat({
   p, isMe, isRevealed, isFacilitator, onKick,
   flyoutOpen, onToggleFlyout, onPickEmoji, onMoreEmojis, quickEmojis,
   hit, gif, popoverBelow, refCb, style, floating,
-}) {
+}: SeatProps) {
   const { t } = useI18n()
-  const showVote = isRevealed && p.vote && p.vote !== '🂠'
-  const rootRef = useRef(null)
+  const showVote = isRevealed && p.vote !== null && p.vote !== HIDDEN_VOTE
+  const rootRef = useRef<HTMLDivElement | null>(null)
 
   // Close the flyout when clicking anywhere outside this seat
   useEffect(() => {
     if (!flyoutOpen) return
-    const onPointerDown = (e) => {
-      if (!rootRef.current?.contains(e.target)) onToggleFlyout()
+    const onPointerDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) onToggleFlyout()
     }
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
@@ -381,18 +452,17 @@ function Seat({
         ].join(' ')}
       >
         {flyoutOpen && (
-          <EmojiFlyout
-            emojis={quickEmojis}
-            onPick={onPickEmoji}
-            onMore={onMoreEmojis}
-            below={popoverBelow}
-          />
+          <EmojiFlyout emojis={quickEmojis} onPick={onPickEmoji} onMore={onMoreEmojis} below={popoverBelow} />
         )}
+
         {gif && <GifBubble gif={gif} below={popoverBelow} />}
 
         {/* Card */}
         {p.isObserver ? (
-          <div className="w-10 h-14 rounded-lg flex items-center justify-center text-lg text-slate-500" title={t('observerSeatTitle')}>
+          <div
+            className="w-10 h-14 rounded-lg flex items-center justify-center text-lg text-slate-500"
+            title={t('observerSeatTitle')}
+          >
             👁
           </div>
         ) : showVote ? (
@@ -419,7 +489,9 @@ function Seat({
             {p.name.trim().charAt(0).toUpperCase() || '?'}
           </div>
           {p.isFacilitator && (
-            <span className="absolute -top-1.5 -right-1.5 text-xs" title={t('hostTitle')}>👑</span>
+            <span className="absolute -top-1.5 -right-1.5 text-xs" title={t('hostTitle')}>
+              👑
+            </span>
           )}
         </div>
 
@@ -430,7 +502,8 @@ function Seat({
             isMe ? 'text-brand-300 font-medium' : 'text-slate-300',
           ].join(' ')}
         >
-          {p.name}{isMe ? t('you') : ''}
+          {p.name}
+          {isMe ? t('you') : ''}
         </span>
 
         {/* Kick (facilitator only) */}
@@ -451,7 +524,14 @@ function Seat({
   )
 }
 
-function EmojiFlyout({ emojis, onPick, onMore, below }) {
+interface EmojiFlyoutProps {
+  emojis: string[]
+  onPick: (emoji: string) => void
+  onMore: () => void
+  below: boolean
+}
+
+function EmojiFlyout({ emojis, onPick, onMore, below }: EmojiFlyoutProps) {
   const { t } = useI18n()
   return (
     <div
@@ -461,7 +541,7 @@ function EmojiFlyout({ emojis, onPick, onMore, below }) {
       ].join(' ')}
       onClick={(e) => e.stopPropagation()}
     >
-      {below && <div className="w-2 h-2 bg-slate-900 border-l border-t border-slate-700 rotate-45 mx-auto -mb-1" />}
+      {below && <PopoverArrow below />}
       <div className="flex items-center gap-0.5 bg-slate-900 border border-slate-700 rounded-full px-2 py-1 shadow-2xl">
         {emojis.map((emoji) => (
           <button
@@ -481,12 +561,20 @@ function EmojiFlyout({ emojis, onPick, onMore, below }) {
           ➕
         </button>
       </div>
-      {!below && <div className="w-2 h-2 bg-slate-900 border-r border-b border-slate-700 rotate-45 mx-auto -mt-1" />}
+      {!below && <PopoverArrow />}
     </div>
   )
 }
 
-function GifBubble({ gif, below }) {
+function PopoverArrow({ below = false }: { below?: boolean }): ReactNode {
+  return below ? (
+    <div className="w-2 h-2 bg-slate-900 border-l border-t border-slate-700 rotate-45 mx-auto -mb-1" />
+  ) : (
+    <div className="w-2 h-2 bg-slate-900 border-r border-b border-slate-700 rotate-45 mx-auto -mt-1" />
+  )
+}
+
+function GifBubble({ gif, below }: { gif: GifReactionEvent; below: boolean }) {
   const { t } = useI18n()
   return (
     <div
@@ -495,11 +583,11 @@ function GifBubble({ gif, below }) {
         below ? 'top-full mt-1.5' : 'bottom-full mb-1.5',
       ].join(' ')}
     >
-      {below && <div className="w-2 h-2 bg-slate-900 border-l border-t border-slate-700 rotate-45 mx-auto -mb-1" />}
+      {below && <PopoverArrow below />}
       <div className="bg-slate-900 border border-slate-700 rounded-xl p-1 shadow-2xl">
         <img src={gifUrl(gif.gif)} alt={t('gifReaction')} className="w-full h-20 object-cover rounded-lg" />
       </div>
-      {!below && <div className="w-2 h-2 bg-slate-900 border-r border-b border-slate-700 rotate-45 mx-auto -mt-1" />}
+      {!below && <PopoverArrow />}
     </div>
   )
 }
@@ -507,8 +595,15 @@ function GifBubble({ gif, below }) {
 const FLY_MS = 600
 const SPLAT_MS = 550
 
-function FlyingEmoji({ item, getSeatCenter, onDone, onImpact }) {
-  const [style, setStyle] = useState(null)
+interface FlyingEmojiProps {
+  item: EmojiThrownEvent
+  getSeatCenter: (participantId: string) => { x: number; y: number } | null
+  onDone: (id: string) => void
+  onImpact: (participantId: string) => void
+}
+
+function FlyingEmoji({ item, getSeatCenter, onDone, onImpact }: FlyingEmojiProps) {
+  const [style, setStyle] = useState<CSSProperties | null>(null)
 
   useEffect(() => {
     const to = getSeatCenter(item.targetId)
@@ -523,7 +618,7 @@ function FlyingEmoji({ item, getSeatCenter, onDone, onImpact }) {
       top: from.y,
       '--tx': `${to.x - from.x}px`,
       '--ty': `${to.y - from.y}px`,
-    })
+    } as CSSProperties)
     const impactTimer = setTimeout(() => onImpact(item.targetId), FLY_MS)
     const doneTimer = setTimeout(() => onDone(item.id), FLY_MS + SPLAT_MS)
     return () => {

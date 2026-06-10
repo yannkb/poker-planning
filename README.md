@@ -28,16 +28,21 @@ App is available at **http://localhost:3000**
 
 ## Development
 
-Requires Node.js 18+.
+Requires Node.js 20+. The repo is an npm workspace (`shared` + `server` + `client`),
+written in strict TypeScript end to end.
 
 ```bash
-# Install all dependencies
+# Install all workspaces
 npm install
-cd server && npm install && cd ..
-cd client && npm install && cd ..
 
-# Run both server and client in dev mode
+# Run server (tsx watch) and client (vite) in dev mode
 npm run dev
+
+# Type-check everything
+npm run typecheck
+
+# Production build (server bundle + client assets)
+npm run build
 ```
 
 - Client: http://localhost:5173
@@ -53,9 +58,13 @@ npm run dev
 
 ## Architecture
 
-- **Server**: Node.js + Express + Socket.io (in-memory state, no database needed)
-- **Client**: React + Vite + TailwindCSS
-- **Deployment**: Docker Compose with Nginx reverse proxy
+- **Shared**: TypeScript workspace package with the socket event contracts, domain
+  types, deck definitions and vote statistics used by both sides
+- **Server**: Node.js + Express + Socket.io in strict TypeScript (in-memory state, no
+  database needed), bundled by esbuild into a single self-contained file
+- **Client**: React + Vite + TailwindCSS in strict TypeScript
+- **Deployment**: Docker Compose with Nginx reverse proxy; the server image ships only
+  the bundled file (no node_modules)
 
 ## Usage
 

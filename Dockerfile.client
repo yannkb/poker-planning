@@ -1,12 +1,16 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY client/package.json ./
-RUN npm install
-COPY client/ ./
+COPY package.json package-lock.json ./
+COPY shared/package.json shared/
+COPY server/package.json server/
+COPY client/package.json client/
+RUN npm ci --workspace=client --ignore-scripts
+COPY shared/ shared/
+COPY client/ client/
 ARG VITE_SERVER_URL=""
-RUN npm run build
+RUN npm run build --workspace=client
 
 FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/client/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

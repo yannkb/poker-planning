@@ -2,17 +2,23 @@
   "name": "planning-poker-server",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.cjs --external:bufferutil --external:utf-8-validate",
+    "start": "node dist/index.cjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "nanoid": "^3.3.7",
+    "planning-poker-shared": "*",
     "socket.io": "^4.7.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "esbuild": "^0.23.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.4"
   }
 }

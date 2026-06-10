@@ -1,48 +1,38 @@
-import { useI18n } from '../lib/i18n.jsx'
+import { summarizeVotes, HIDDEN_VOTE, type ClientParticipant } from 'planning-poker-shared'
+import { useI18n } from '../lib/i18n'
 
-export default function ResultsDisplay({ participants, deckValues }) {
+interface ResultsDisplayProps {
+  participants: ClientParticipant[]
+  deckValues: readonly string[]
+}
+
+export default function ResultsDisplay({ participants, deckValues }: ResultsDisplayProps) {
   const { t } = useI18n()
-  const revealed = participants.filter((p) => !p.isObserver && p.vote && p.vote !== '🂠')
+  const revealed = participants.filter(
+    (p): p is ClientParticipant & { vote: string } => !p.isObserver && p.vote !== null && p.vote !== HIDDEN_VOTE,
+  )
 
   if (revealed.length === 0) {
-    return (
-      <div className="text-center text-slate-400 py-6">
-        {t('noVotesCast')}
-      </div>
-    )
+    return <div className="text-center text-slate-400 py-6">{t('noVotesCast')}</div>
   }
 
-  // Build distribution using deck order
-  const counts = {}
-  revealed.forEach((p) => { counts[p.vote] = (counts[p.vote] || 0) + 1 })
+  const { average, counts, consensus } = summarizeVotes(revealed.map((p) => p.vote))
 
-  const orderedValues = deckValues
-    ? deckValues.filter((v) => counts[v])
-    : Object.keys(counts)
-
+  // Distribution bars follow deck order
+  const orderedValues = deckValues.filter((v) => counts[v])
   const maxCount = Math.max(...Object.values(counts))
-
-  const numericVotes = revealed
-    .map((p) => parseFloat(p.vote))
-    .filter((v) => !isNaN(v))
-
-  const avg = numericVotes.length
-    ? Math.round((numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length) * 10) / 10
-    : null
-
-  const agreement = revealed.length > 1 && new Set(revealed.map((p) => p.vote)).size === 1
 
   return (
     <div className="space-y-4">
       {/* Summary row */}
       <div className="flex items-center gap-4 flex-wrap">
-        {avg !== null && (
+        {average !== null && (
           <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-bold text-brand-300">{avg}</span>
+            <span className="text-3xl font-bold text-brand-300">{average}</span>
             <span className="text-slate-400 text-sm">{t('avg')}</span>
           </div>
         )}
-        {agreement && (
+        {consensus && (
           <span className="text-emerald-400 bg-emerald-400/10 border border-emerald-400/30 px-3 py-1 rounded-full text-sm font-medium">
             {t('consensus')}
           </span>
@@ -52,17 +42,17 @@ export default function ResultsDisplay({ participants, deckValues }) {
 
       {/* Distribution bars */}
       <div className="flex items-end gap-2 h-16">
-        {orderedValues.map((v) => {
-          const count = counts[v] || 0
+        {orderedValues.map((value) => {
+          const count = counts[value] ?? 0
           const height = maxCount > 0 ? (count / maxCount) * 100 : 0
           return (
-            <div key={v} className="flex flex-col items-center gap-1 flex-1 min-w-0">
+            <div key={value} className="flex flex-col items-center gap-1 flex-1 min-w-0">
               <span className="text-xs text-slate-400">{count}</span>
               <div
                 className="w-full bg-brand-600 rounded-t-sm transition-all duration-500"
                 style={{ height: `${height}%`, minHeight: count > 0 ? '4px' : '0' }}
               />
-              <span className="text-xs font-medium text-slate-300 truncate w-full text-center">{v}</span>
+              <span className="text-xs font-medium text-slate-300 truncate w-full text-center">{value}</span>
             </div>
           )
         })}

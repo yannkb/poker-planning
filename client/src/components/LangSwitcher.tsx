@@ -1,4 +1,4 @@
-import { LANGS, useI18n } from '../lib/i18n.jsx'
+import { LANGS, useI18n } from '../lib/i18n'
 
 export default function LangSwitcher() {
   const { lang, setLang } = useI18n()

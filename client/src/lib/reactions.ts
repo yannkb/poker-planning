@@ -1,15 +1,19 @@
 // Emojis that can be thrown at other participants.
-// Must stay in sync with server/src/reactions.js (server validates payloads).
-export const THROWABLE_EMOJIS = ['🎉', '❤️', '😂', '👏', '🔥', '🍅', '🥚', '💩']
+// The server validates payloads (any real emoji sequence is allowed).
+export const THROWABLE_EMOJIS: readonly string[] = ['🎉', '❤️', '😂', '👏', '🔥', '🍅', '🥚', '💩']
 
-// Curated reaction GIFs served from the Giphy CDN (no API key required).
-// Keys must stay in sync with server/src/reactions.js.
+export interface ReactionGif {
+  label: string
+  url: string
+}
+
 // Resolve a broadcast gif payload (curated key or Giphy media id) to a CDN URL
-export function gifUrl(gif) {
+export function gifUrl(gif: string): string {
   return REACTION_GIFS[gif]?.url ?? `https://media.giphy.com/media/${gif}/giphy.gif`
 }
 
-export const REACTION_GIFS = {
+// Curated reaction GIFs served from the Giphy CDN (no API key required).
+export const REACTION_GIFS: Record<string, ReactionGif> = {
   'on-it': { label: 'On it', url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif' },
   'dev-dog': { label: 'Dev dog', url: 'https://media.giphy.com/media/mCRJDo24UvJMA/giphy.gif' },
   'mind-blown': { label: 'Mind blown', url: 'https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif' },

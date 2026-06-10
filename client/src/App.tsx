@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useSocket } from './hooks/useSocket.js'
-import { useI18n } from './lib/i18n.jsx'
-import Lobby from './components/Lobby.jsx'
-import GameBoard from './components/GameBoard.jsx'
+import { useSocket } from './hooks/useSocket'
+import { useI18n } from './lib/i18n'
+import Lobby from './components/Lobby'
+import GameBoard from './components/GameBoard'
 
 export default function App() {
   const { t } = useI18n()
   const socket = useSocket()
-  const [view, setView] = useState('lobby') // 'lobby' | 'game'
+  const [view, setView] = useState<'lobby' | 'game'>('lobby')
 
   const pendingJoinCode = (() => {
     const params = new URLSearchParams(window.location.search)
@@ -25,14 +25,14 @@ export default function App() {
       setView('lobby')
       socket.setKicked(false)
     }
-  }, [socket.kicked])
+  }, [socket.kicked]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleCreateRoom(name, facilitatorName, deck) {
+  async function handleCreateRoom(name: string, facilitatorName: string, deck: string) {
     await socket.createRoom(name, facilitatorName, deck)
     // room state arrives via socket → view switches automatically
   }
 
-  function handleJoinRoom(roomId, playerName) {
+  function handleJoinRoom(roomId: string, playerName: string) {
     socket.joinRoom(roomId, playerName)
     // room state arrives via socket → view switches automatically
   }

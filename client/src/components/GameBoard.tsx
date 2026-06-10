@@ -1,14 +1,41 @@
-import { useEffect, useState } from 'react'
-import VotingCard from './VotingCard.jsx'
-import PokerTable from './PokerTable.jsx'
-import ReactionBar from './ReactionBar.jsx'
-import ResultsDisplay from './ResultsDisplay.jsx'
-import IssueQueue from './IssueQueue.jsx'
-import LangSwitcher from './LangSwitcher.jsx'
-import { DECK_META } from '../lib/decks.js'
-import { useI18n } from '../lib/i18n.jsx'
+import { useEffect, useRef, useState } from 'react'
+import {
+  DECKS,
+  DECK_KEYS,
+  type ClientParticipant,
+  type ClientRoom,
+  type EmojiThrownEvent,
+  type GifReactionEvent,
+} from 'planning-poker-shared'
+import VotingCard from './VotingCard'
+import PokerTable from './PokerTable'
+import ReactionBar from './ReactionBar'
+import ResultsDisplay from './ResultsDisplay'
+import IssueQueue from './IssueQueue'
+import LangSwitcher from './LangSwitcher'
+import { useI18n } from '../lib/i18n'
+import type { SubscribeFn } from '../hooks/useSocket'
 
 const GIF_BUBBLE_MS = 5000
+
+interface GameBoardProps {
+  room: ClientRoom
+  myId: string | null
+  me: ClientParticipant | undefined
+  isFacilitator: boolean
+  onCastVote: (vote: string | null) => void
+  onReveal: () => void
+  onNewRound: () => void
+  onAddIssue: (title: string) => void
+  onSelectIssue: (issueId: string) => void
+  onSetEstimate: (issueId: string, estimate: string) => void
+  onChangeDeck: (deck: string) => void
+  onKick: (targetId: string) => void
+  onToggleObserver: () => void
+  onThrowEmoji: (targetId: string, emoji: string) => void
+  onSendGif: (gif: string) => void
+  subscribe: SubscribeFn
+}
 
 export default function GameBoard({
   room, myId, me, isFacilitator,
@@ -16,46 +43,52 @@ export default function GameBoard({
   onAddIssue, onSelectIssue, onSetEstimate,
   onChangeDeck, onKick, onToggleObserver,
   onThrowEmoji, onSendGif, subscribe,
-}) {
+}: GameBoardProps) {
   const { t } = useI18n()
   const [showSettings, setShowSettings] = useState(false)
   const [copied, setCopied] = useState(false)
 
   // Transient reaction state (never part of room state)
-  const [flyingEmojis, setFlyingEmojis] = useState([])
-  const [gifBubbles, setGifBubbles] = useState({})
+  const [flyingEmojis, setFlyingEmojis] = useState<EmojiThrownEvent[]>([])
+  const [gifBubbles, setGifBubbles] = useState<Record<string, GifReactionEvent>>({})
+  const gifTimeouts = useRef(new Set<ReturnType<typeof setTimeout>>())
 
-  const deckValues = room.deckValues ?? []
+  const deckValues = room.deckValues
   const isRevealed = room.status === 'revealed'
   const isVoting = room.status === 'voting'
 
-  const currentIssue = room.issues?.find((i) => i.id === room.currentIssueId) ?? null
+  const currentIssue = room.issues.find((i) => i.id === room.currentIssueId) ?? null
   const votedCount = room.participants.filter((p) => !p.isObserver && p.hasVoted).length
   const voterCount = room.participants.filter((p) => !p.isObserver).length
 
   useEffect(() => {
+    const timeouts = gifTimeouts.current
     const offEmoji = subscribe('emoji-thrown', (event) => {
       setFlyingEmojis((prev) => [...prev.slice(-19), event])
     })
     const offGif = subscribe('gif-reaction', (event) => {
       setGifBubbles((prev) => ({ ...prev, [event.fromId]: event }))
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
+        timeouts.delete(timeout)
         setGifBubbles((prev) => {
           if (prev[event.fromId]?.id !== event.id) return prev
-          const { [event.fromId]: _gone, ...rest } = prev
+          const { [event.fromId]: _expired, ...rest } = prev
           return rest
         })
       }, GIF_BUBBLE_MS)
+      timeouts.add(timeout)
     })
     return () => {
       offEmoji()
       offGif()
+      timeouts.forEach(clearTimeout)
+      timeouts.clear()
     }
   }, [subscribe])
 
   function copyCode() {
     const url = `${window.location.origin}?join=${room.id}`
-    navigator.clipboard.writeText(url).then(() => {
+    void navigator.clipboard.writeText(url).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
@@ -86,7 +119,7 @@ export default function GameBoard({
 
           {/* Deck badge */}
           <span className="hidden sm:inline text-xs bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded-full">
-            {DECK_META[room.deck]?.emoji ?? ''} {t(`deck_${room.deck}`)}
+            {DECKS[room.deck].emoji} {t(`deck_${room.deck}`)}
           </span>
 
           {/* Observer toggle */}
@@ -120,10 +153,13 @@ export default function GameBoard({
       {showSettings && isFacilitator && (
         <div className="border-b border-slate-800 bg-slate-900 px-4 py-3 flex items-center gap-4 flex-wrap">
           <span className="text-sm text-slate-400">{t('changeDeck')}</span>
-          {Object.entries(DECK_META).map(([key, { emoji }]) => (
+          {DECK_KEYS.map((key) => (
             <button
               key={key}
-              onClick={() => { onChangeDeck(key); setShowSettings(false) }}
+              onClick={() => {
+                onChangeDeck(key)
+                setShowSettings(false)
+              }}
               className={[
                 'text-sm px-3 py-1 rounded-lg border transition-colors',
                 room.deck === key
@@ -131,7 +167,7 @@ export default function GameBoard({
                   : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200',
               ].join(' ')}
             >
-              {emoji} {t(`deck_${key}`)}
+              {DECKS[key].emoji} {t(`deck_${key}`)}
             </button>
           ))}
         </div>
@@ -150,14 +186,14 @@ export default function GameBoard({
               isRevealed={isRevealed}
               isFacilitator={isFacilitator}
               currentIssue={currentIssue}
-              hasIssues={Boolean(room.issues?.length)}
+              hasIssues={room.issues.length > 0}
               votedCount={votedCount}
               voterCount={voterCount}
+              roundSeed={room.rounds.length}
               onReveal={onReveal}
               onNewRound={onNewRound}
               onKick={onKick}
               onThrowEmoji={onThrowEmoji}
-              roundSeed={room.rounds?.length ?? 0}
               flyingEmojis={flyingEmojis}
               onEmojiDone={(id) => setFlyingEmojis((prev) => prev.filter((f) => f.id !== id))}
               gifBubbles={gifBubbles}
@@ -175,21 +211,19 @@ export default function GameBoard({
 
             {!me?.isObserver && isVoting && (
               <div className="flex flex-wrap justify-center gap-3 pt-2">
-                {deckValues.map((v) => (
+                {deckValues.map((value) => (
                   <VotingCard
-                    key={v}
-                    value={v}
-                    selected={me?.vote === v}
-                    onClick={() => onCastVote(me?.vote === v ? null : v)}
+                    key={value}
+                    value={value}
+                    selected={me?.vote === value}
+                    onClick={() => onCastVote(me?.vote === value ? null : value)}
                   />
                 ))}
               </div>
             )}
 
             {me?.isObserver && isVoting && (
-              <div className="text-center text-slate-500 py-2">
-                {t('observingNote')}
-              </div>
+              <div className="text-center text-slate-500 py-2">{t('observingNote')}</div>
             )}
 
             <ReactionBar onSendGif={onSendGif} />
@@ -200,7 +234,7 @@ export default function GameBoard({
         <aside className="w-full lg:w-72 border-t lg:border-t-0 lg:border-l border-slate-800 bg-slate-900/50 flex flex-col">
           <div className="p-4 flex-1 overflow-y-auto">
             <IssueQueue
-              issues={room.issues ?? []}
+              issues={room.issues}
               currentIssueId={room.currentIssueId}
               isFacilitator={isFacilitator}
               onAddIssue={onAddIssue}

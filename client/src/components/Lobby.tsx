@@ -1,26 +1,36 @@
-import { useState, useEffect } from 'react'
-import { DECK_META } from '../lib/decks.js'
-import { useI18n } from '../lib/i18n.jsx'
-import LangSwitcher from './LangSwitcher.jsx'
+import { useState, useEffect, type ReactNode } from 'react'
+import { DECKS, DECK_KEYS } from 'planning-poker-shared'
+import { useI18n } from '../lib/i18n'
+import LangSwitcher from './LangSwitcher'
 
-export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, defaultJoinCode }) {
+interface LobbyProps {
+  onCreateRoom: (name: string, facilitatorName: string, deck: string) => Promise<void>
+  onJoinRoom: (roomId: string, playerName: string) => void
+  error: string | null
+  clearError: () => void
+  defaultJoinCode: string | null
+}
+
+export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, defaultJoinCode }: LobbyProps) {
   const { t } = useI18n()
-  const [tab, setTab] = useState(defaultJoinCode ? 'join' : 'create')
+  const [tab, setTab] = useState<'create' | 'join'>(defaultJoinCode ? 'join' : 'create')
   const [loading, setLoading] = useState(false)
 
   // Create form
   const [sessionName, setSessionName] = useState('')
   const [hostName, setHostName] = useState('')
-  const [deck, setDeck] = useState('fibonacci')
+  const [deck, setDeck] = useState<string>('fibonacci')
 
   // Reset loading when a socket error arrives
-  useEffect(() => { if (error) setLoading(false) }, [error])
+  useEffect(() => {
+    if (error) setLoading(false)
+  }, [error])
 
   // Join form
   const [roomCode, setRoomCode] = useState(defaultJoinCode ?? '')
   const [playerName, setPlayerName] = useState('')
 
-  async function handleCreate(e) {
+  async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (!hostName.trim()) return
     setLoading(true)
@@ -28,12 +38,12 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
     setLoading(false)
   }
 
-  async function handleJoin(e) {
+  function handleJoin(e: React.FormEvent) {
     e.preventDefault()
     if (!roomCode.trim() || !playerName.trim()) return
     setLoading(true)
     onJoinRoom(roomCode.trim().toUpperCase(), playerName.trim())
-    // Join is async via socket; loading cleared by parent
+    // Join is async via socket; loading cleared by the error effect on failure
   }
 
   return (
@@ -52,10 +62,13 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
         {/* Tabs */}
         <div className="flex border-b border-slate-800">
-          {['create', 'join'].map((key) => (
+          {(['create', 'join'] as const).map((key) => (
             <button
               key={key}
-              onClick={() => { setTab(key); clearError() }}
+              onClick={() => {
+                setTab(key)
+                clearError()
+              }}
               className={[
                 'flex-1 py-3 text-sm font-medium transition-colors',
                 tab === key
@@ -78,19 +91,10 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
           {tab === 'create' ? (
             <form onSubmit={handleCreate} className="space-y-4">
               <Field label={t('yourName')} required>
-                <Input
-                  value={hostName}
-                  onChange={setHostName}
-                  placeholder={t('phHostName')}
-                  autoFocus
-                />
+                <Input value={hostName} onChange={setHostName} placeholder={t('phHostName')} autoFocus />
               </Field>
               <Field label={t('sessionName')}>
-                <Input
-                  value={sessionName}
-                  onChange={setSessionName}
-                  placeholder={t('phSession')}
-                />
+                <Input value={sessionName} onChange={setSessionName} placeholder={t('phSession')} />
               </Field>
               <Field label={t('cardDeck')}>
                 <select
@@ -98,8 +102,10 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
                   onChange={(e) => setDeck(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-100 focus:outline-none focus:border-brand-500"
                 >
-                  {Object.entries(DECK_META).map(([key, { emoji }]) => (
-                    <option key={key} value={key}>{emoji} {t(`deck_${key}`)}</option>
+                  {DECK_KEYS.map((key) => (
+                    <option key={key} value={key}>
+                      {DECKS[key].emoji} {t(`deck_${key}`)}
+                    </option>
                   ))}
                 </select>
               </Field>
@@ -114,12 +120,7 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
           ) : (
             <form onSubmit={handleJoin} className="space-y-4">
               <Field label={t('yourName')} required>
-                <Input
-                  value={playerName}
-                  onChange={setPlayerName}
-                  placeholder={t('phPlayerName')}
-                  autoFocus
-                />
+                <Input value={playerName} onChange={setPlayerName} placeholder={t('phPlayerName')} autoFocus />
               </Field>
               <Field label={t('roomCode')} required>
                 <Input
@@ -142,25 +143,33 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
         </div>
       </div>
 
-      <p className="mt-6 text-slate-600 text-xs">
-        {t('shareHint')}
-      </p>
+      <p className="mt-6 text-slate-600 text-xs">{t('shareHint')}</p>
     </div>
   )
 }
 
-function Field({ label, required, children }) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
   return (
     <div>
       <label className="block text-sm text-slate-300 mb-1.5">
-        {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+        {label}
+        {required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       {children}
     </div>
   )
 }
 
-function Input({ value, onChange, placeholder, autoFocus, maxLength, className = '' }) {
+interface InputProps {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  autoFocus?: boolean
+  maxLength?: number
+  className?: string
+}
+
+function Input({ value, onChange, placeholder, autoFocus, maxLength, className = '' }: InputProps) {
   return (
     <input
       value={value}
