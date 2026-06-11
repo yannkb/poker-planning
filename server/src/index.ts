@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import express from 'express'
 import { Server, type Socket } from 'socket.io'
 import {
@@ -245,6 +247,18 @@ io.on('connection', (socket) => {
     broadcastRoom(gm.leaveRoom(roomId, socket.id))
   })
 })
+
+// In production, serve the built client (single-service deploy, e.g. Render)
+// cwd is the repo root when started via `npm start`, or server/ when the
+// workspace script runs directly — check both.
+const clientDist = [
+  path.resolve(process.cwd(), 'client/dist'),
+  path.resolve(process.cwd(), '../client/dist'),
+].find(existsSync)
+if (clientDist) {
+  app.use(express.static(clientDist))
+  app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')))
+}
 
 const PORT = Number(process.env.PORT) || 3001
 server.listen(PORT, () => console.log(`Planning Poker server running on port ${PORT}`))
