@@ -6,7 +6,8 @@ services:
     restart: unless-stopped
     environment:
       PORT: 3001
-      # Optional: enables GIF search in the reaction picker (free key from developers.giphy.com)
+      # Optional: enables GIF search in the reaction picker (free key from developers.giphy.com).
+      # Results are cached server-side, so one key comfortably serves the whole room.
       GIPHY_API_KEY: ${GIPHY_API_KEY:-}
     # No external port needed — nginx proxies to it
 

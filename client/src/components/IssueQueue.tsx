@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Issue } from 'planning-poker-shared'
 import { useI18n } from '../lib/i18n'
+import TruncatedText from './TruncatedText'
 
 interface IssueQueueProps {
   issues: Issue[]
@@ -110,9 +111,12 @@ function IssueRow({ issue, isActive, isFacilitator, onSelect, onSetEstimate }: I
       ].join(' ')}
     >
       <div className="flex items-center gap-2">
-        <span className={['flex-1 truncate', isActive ? 'text-brand-200' : 'text-slate-300'].join(' ')}>
-          {isActive && <span className="mr-1 text-brand-400">▶</span>}
-          {issue.title}
+        <span className="flex items-center gap-1 flex-1 min-w-0">
+          {isActive && <span className="text-brand-400 shrink-0">▶</span>}
+          <TruncatedText
+            text={issue.title}
+            className={['flex-1 min-w-0', isActive ? 'text-brand-200' : 'text-slate-300'].join(' ')}
+          />
         </span>
         {issue.estimate !== null ? (
           <span

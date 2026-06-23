@@ -11,7 +11,7 @@ A self-hosted planning poker app for agile team estimation. Real-time multiplaye
 - Facilitator controls: reveal votes, start new round, change deck, kick participants
 - Issue queue: add stories, select the active one, set final estimates
 - Throw emojis at teammates: click a player to open an emoji flyout (with full emoji picker and recently-used slots) and watch the projectile fly across the table
-- GIF reactions: curated classics out of the box, plus Giphy search when `GIPHY_API_KEY` is set
+- GIF reactions: curated classics out of the box, plus full Giphy search when `GIPHY_API_KEY` is set (results are cached server-side to stay under rate limits)
 - i18n: French by default, English available via the FR/EN switcher
 - Meme quotes during voting and tongue-in-cheek one-liners about the revealed results
 - Observer mode
@@ -54,7 +54,7 @@ npm run build
 |---|---|---|
 | `PORT` | `3001` | Server port |
 | `VITE_SERVER_URL` | `` (same origin) | Override WebSocket server URL for the client |
-| `GIPHY_API_KEY` | _(unset)_ | Optional. Enables GIF search in the reaction picker (free key from [developers.giphy.com](https://developers.giphy.com)). Without it, the curated GIF set still works. |
+| `GIPHY_API_KEY` | _(unset)_ | Optional. Enables GIF search in the reaction picker (free key from [developers.giphy.com](https://developers.giphy.com)). Results are cached server-side (1h) and concurrent identical searches are coalesced, so one key serves the whole room without hitting rate limits. Without it, the curated GIF set still works. |
 
 ## Architecture
 

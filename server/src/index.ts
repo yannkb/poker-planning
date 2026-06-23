@@ -39,36 +39,76 @@ app.get('/api/decks', (_req, res) => {
   res.json(DECKS)
 })
 
-// Giphy search proxy: keeps the API key server-side. Without a key the
-// client falls back to its curated reaction GIFs.
+// Giphy search proxy: keeps the API key server-side. Every client in the room
+// searches through this one key, so results are cached and duplicate in-flight
+// queries are shared — repeated/popular searches cost a single upstream call,
+// which keeps the room well under Giphy's rate limit. On a rate-limit or
+// upstream blip we serve stale cache. Without a key, the client uses its
+// curated GIFs.
+const GIF_CACHE_TTL_MS = 60 * 60 * 1000 // GIF results are static; an hour is safe
+const GIF_CACHE_MAX = 500
+const gifCache = new Map<string, { at: number; gifs: GifSearchResult[] }>()
+const gifInflight = new Map<string, Promise<GifSearchResult[]>>()
+
+function normalizeGifQuery(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 100)
+}
+
+// Coalesces concurrent identical queries onto one upstream request.
+function fetchGiphy(key: string, q: string): Promise<GifSearchResult[]> {
+  const pending = gifInflight.get(q)
+  if (pending) return pending
+  const promise = (async () => {
+    try {
+      const url = `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&limit=24&rating=pg-13`
+      const upstream = await fetch(url)
+      if (!upstream.ok) throw new Error(`giphy ${upstream.status}`)
+      const json = (await upstream.json()) as {
+        data?: Array<{ id: string; title?: string; images?: { fixed_height_small?: { url?: string } } }>
+      }
+      return (json.data ?? []).map((g) => ({
+        id: g.id,
+        title: g.title ?? '',
+        preview: g.images?.fixed_height_small?.url ?? `https://media.giphy.com/media/${g.id}/200.gif`,
+      }))
+    } finally {
+      gifInflight.delete(q)
+    }
+  })()
+  gifInflight.set(q, promise)
+  return promise
+}
+
 app.get('/api/gifs/search', async (req, res) => {
   const key = process.env.GIPHY_API_KEY
   if (!key) {
     res.status(503).json({ error: 'GIF search is not configured (set GIPHY_API_KEY)' })
     return
   }
-  const q = String(req.query.q ?? '').trim().slice(0, 100)
-  if (!q) {
+  const q = normalizeGifQuery(String(req.query.q ?? ''))
+  if (q.length < 2) {
     res.json({ gifs: [] })
     return
   }
+  const cached = gifCache.get(q)
+  if (cached && Date.now() - cached.at < GIF_CACHE_TTL_MS) {
+    res.json({ gifs: cached.gifs })
+    return
+  }
   try {
-    const url = `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&limit=24&rating=pg-13`
-    const upstream = await fetch(url)
-    if (!upstream.ok) {
-      res.status(502).json({ error: 'GIF search failed' })
-      return
+    const gifs = await fetchGiphy(key, q)
+    gifCache.set(q, { at: Date.now(), gifs })
+    if (gifCache.size > GIF_CACHE_MAX) {
+      const oldest = gifCache.keys().next().value
+      if (oldest !== undefined) gifCache.delete(oldest)
     }
-    const json = (await upstream.json()) as {
-      data?: Array<{ id: string; title?: string; images?: { fixed_height_small?: { url?: string } } }>
-    }
-    const gifs: GifSearchResult[] = (json.data ?? []).map((g) => ({
-      id: g.id,
-      title: g.title ?? '',
-      preview: g.images?.fixed_height_small?.url ?? `https://media.giphy.com/media/${g.id}/200.gif`,
-    }))
     res.json({ gifs })
   } catch {
+    // Rate-limited or upstream down: stale results beat no results.
+    if (cached) {
+      res.json({ gifs: cached.gifs })
+      return
+    }
     res.status(502).json({ error: 'GIF search failed' })
   }
 })

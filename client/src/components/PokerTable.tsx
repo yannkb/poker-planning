@@ -14,6 +14,7 @@ import {
 } from 'planning-poker-shared'
 import { gifUrl, THROWABLE_EMOJIS } from '../lib/reactions'
 import { MEME_QUOTES, RESULT_QUIPS, pickFrom, useI18n, type QuipCategory } from '../lib/i18n'
+import TruncatedText from './TruncatedText'
 
 const EmojiPickerPanel = lazy(() => import('./EmojiPickerPanel'))
 
@@ -342,7 +343,9 @@ function TableCenter({
       {currentIssue ? (
         <>
           <p className="text-[10px] uppercase tracking-wider text-emerald-300/60 mb-0.5">{t('estimating')}</p>
-          <h2 className="text-base font-semibold text-slate-100 line-clamp-2">{currentIssue.title}</h2>
+          <h2 className="text-base font-semibold text-slate-100">
+            <TruncatedText text={currentIssue.title} lines={2} className="block" />
+          </h2>
         </>
       ) : (
         <h2 className="text-base font-semibold text-slate-300">

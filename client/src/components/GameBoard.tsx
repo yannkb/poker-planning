@@ -13,6 +13,7 @@ import ReactionBar from './ReactionBar'
 import ResultsDisplay from './ResultsDisplay'
 import IssueQueue from './IssueQueue'
 import LangSwitcher from './LangSwitcher'
+import TruncatedText from './TruncatedText'
 import { useI18n } from '../lib/i18n'
 import type { SubscribeFn } from '../hooks/useSocket'
 
@@ -100,7 +101,9 @@ export default function GameBoard({
       <header className="border-b border-slate-800 px-4 py-3 flex items-center gap-4 bg-slate-900/80 backdrop-blur">
         <div className="text-2xl">🃏</div>
         <div className="flex-1 min-w-0">
-          <h1 className="font-semibold text-slate-100 truncate">{room.name}</h1>
+          <h1 className="font-semibold text-slate-100">
+            <TruncatedText text={room.name} className="block" />
+          </h1>
           <div className="flex items-center gap-2 mt-0.5">
             <span className="text-xs text-slate-400">{t('room')}</span>
             <button
