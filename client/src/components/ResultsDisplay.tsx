@@ -1,12 +1,23 @@
-import { summarizeVotes, HIDDEN_VOTE, type ClientParticipant } from 'planning-poker-shared'
+import {
+  summarizeVotes,
+  nearestDeckValue,
+  HIDDEN_VOTE,
+  type ClientParticipant,
+  type Issue,
+} from 'planning-poker-shared'
 import { useI18n } from '../lib/i18n'
 
 interface ResultsDisplayProps {
   participants: ClientParticipant[]
   deckValues: readonly string[]
+  currentIssue?: Issue | null
+  isFacilitator?: boolean
+  onSetEstimate?: (issueId: string, estimate: string) => void
 }
 
-export default function ResultsDisplay({ participants, deckValues }: ResultsDisplayProps) {
+export default function ResultsDisplay({
+  participants, deckValues, currentIssue, isFacilitator, onSetEstimate,
+}: ResultsDisplayProps) {
   const { t } = useI18n()
   const revealed = participants.filter(
     (p): p is ClientParticipant & { vote: string } => !p.isObserver && p.vote !== null && p.vote !== HIDDEN_VOTE,
@@ -17,6 +28,8 @@ export default function ResultsDisplay({ participants, deckValues }: ResultsDisp
   }
 
   const { average, counts, consensus } = summarizeVotes(revealed.map((p) => p.vote))
+  // Snap the raw average onto a real card so estimates stay on the scale.
+  const suggested = average !== null ? nearestDeckValue(average, deckValues) : null
 
   // Distribution bars follow deck order
   const orderedValues = deckValues.filter((v) => counts[v])
@@ -26,16 +39,28 @@ export default function ResultsDisplay({ participants, deckValues }: ResultsDisp
     <div className="space-y-4">
       {/* Summary row */}
       <div className="flex items-center gap-4 flex-wrap">
-        {average !== null && (
-          <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-bold text-brand-300">{average}</span>
-            <span className="text-slate-400 text-sm">{t('avg')}</span>
+        {suggested !== null && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-brand-300">{suggested}</span>
+            <span className="text-slate-400 text-sm">{t('estimateLabel')}</span>
+            {average !== null && String(average) !== suggested && (
+              <span className="text-slate-500 text-xs">{t('avgValue', { value: average })}</span>
+            )}
           </div>
         )}
         {consensus && (
           <span className="text-emerald-400 bg-emerald-400/10 border border-emerald-400/30 px-3 py-1 rounded-full text-sm font-medium">
             {t('consensus')}
           </span>
+        )}
+        {isFacilitator && currentIssue && suggested !== null && onSetEstimate && (
+          <button
+            onClick={() => onSetEstimate(currentIssue.id, suggested)}
+            disabled={currentIssue.estimate === suggested}
+            className="text-sm font-medium px-3 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 text-white disabled:opacity-40 disabled:cursor-default transition-colors"
+          >
+            {currentIssue.estimate === suggested ? t('estimateSet') : t('setEstimateTo', { value: suggested })}
+          </button>
         )}
         <span className="text-slate-400 text-sm ml-auto">{t('votesCount', { count: revealed.length })}</span>
       </div>

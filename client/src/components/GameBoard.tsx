@@ -187,6 +187,7 @@ export default function GameBoard({
               isFacilitator={isFacilitator}
               currentIssue={currentIssue}
               hasIssues={room.issues.length > 0}
+              deckValues={deckValues}
               votedCount={votedCount}
               voterCount={voterCount}
               roundSeed={room.rounds.length}
@@ -205,7 +206,13 @@ export default function GameBoard({
             {isRevealed && (
               <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-4 animate-bounce-in">
                 <h3 className="text-sm font-semibold text-slate-300 mb-4">{t('results')}</h3>
-                <ResultsDisplay participants={room.participants} deckValues={deckValues} />
+                <ResultsDisplay
+                  participants={room.participants}
+                  deckValues={deckValues}
+                  currentIssue={currentIssue}
+                  isFacilitator={isFacilitator}
+                  onSetEstimate={onSetEstimate}
+                />
               </div>
             )}
 

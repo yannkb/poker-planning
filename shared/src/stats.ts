@@ -16,8 +16,29 @@ export interface VoteSummary {
 }
 
 function numericValue(vote: string): number | null {
+  if (vote === '½') return 0.5
   const n = parseFloat(vote)
   return Number.isNaN(n) ? null : n
+}
+
+/**
+ * Snap a numeric average onto the closest real card in the deck so an estimate
+ * stays on the scale (e.g. 1.8 → "2"). Ties round up to the larger card, since
+ * decks are ordered ascending. Returns null when the deck has no numeric cards.
+ */
+export function nearestDeckValue(target: number, deckValues: readonly string[]): string | null {
+  let best: string | null = null
+  let bestDist = Infinity
+  for (const value of deckValues) {
+    const n = numericValue(value)
+    if (n === null) continue
+    const dist = Math.abs(n - target)
+    if (dist <= bestDist) {
+      bestDist = dist
+      best = value
+    }
+  }
+  return best
 }
 
 export function summarizeVotes(votes: readonly string[]): VoteSummary {

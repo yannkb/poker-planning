@@ -5,6 +5,7 @@ import {
 import {
   HIDDEN_VOTE,
   summarizeVotes,
+  nearestDeckValue,
   type ClientParticipant,
   type EmojiThrownEvent,
   type GifReactionEvent,
@@ -64,6 +65,7 @@ interface PokerTableProps {
   isFacilitator: boolean
   currentIssue: Issue | null
   hasIssues: boolean
+  deckValues: readonly string[]
   votedCount: number
   voterCount: number
   roundSeed: number
@@ -78,7 +80,7 @@ interface PokerTableProps {
 
 export default function PokerTable({
   participants, myId, isVoting, isRevealed, isFacilitator,
-  currentIssue, votedCount, voterCount, hasIssues, roundSeed,
+  currentIssue, votedCount, voterCount, hasIssues, deckValues, roundSeed,
   onReveal, onNewRound, onKick,
   onThrowEmoji,
   flyingEmojis, onEmojiDone,
@@ -200,6 +202,7 @@ export default function PokerTable({
     <TableCenter
       currentIssue={currentIssue}
       hasIssues={hasIssues}
+      deckValues={deckValues}
       roundSeed={roundSeed}
       isVoting={isVoting}
       isRevealed={isRevealed}
@@ -305,6 +308,7 @@ function pickQuipCategory({ consensus, numeric, average, counts }: VoteSummary, 
 interface TableCenterProps {
   currentIssue: Issue | null
   hasIssues: boolean
+  deckValues: readonly string[]
   roundSeed: number
   isVoting: boolean
   isRevealed: boolean
@@ -318,13 +322,15 @@ interface TableCenterProps {
 
 function TableCenter({
   currentIssue, hasIssues, isVoting, isRevealed, isFacilitator,
-  votedCount, voterCount, participants, roundSeed, onReveal, onNewRound,
+  votedCount, voterCount, participants, deckValues, roundSeed, onReveal, onNewRound,
 }: TableCenterProps) {
   const { t, lang } = useI18n()
   const votes = participants
     .filter((p) => !p.isObserver && p.vote !== null && p.vote !== HIDDEN_VOTE)
     .map((p) => p.vote as string)
   const summary = summarizeVotes(votes)
+  // Snap the raw average onto a real card so estimates stay on the scale.
+  const suggested = summary.average !== null ? nearestDeckValue(summary.average, deckValues) : null
 
   const memeQuote = pickFrom(MEME_QUOTES[lang], roundSeed)
   const resultQuip = isRevealed
@@ -355,9 +361,12 @@ function TableCenter({
 
       {isRevealed && (
         <div className="mt-2 flex items-center justify-center gap-3 flex-wrap">
-          {summary.average !== null && (
+          {suggested !== null && (
             <span className="text-2xl font-bold text-brand-300">
-              {summary.average} <span className="text-xs font-normal text-slate-400">{t('avg')}</span>
+              {suggested}
+              {summary.average !== null && String(summary.average) !== suggested && (
+                <span className="text-xs font-normal text-slate-400"> {t('avgValue', { value: summary.average })}</span>
+              )}
             </span>
           )}
           {summary.consensus && (
