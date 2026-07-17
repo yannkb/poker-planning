@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.cjs --external:bufferutil --external:utf-8-validate",
     "start": "node dist/index.cjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -19,6 +20,7 @@
     "@types/node": "^20.14.0",
     "esbuild": "^0.23.0",
     "tsx": "^4.16.0",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^4.1.10"
   }
 }

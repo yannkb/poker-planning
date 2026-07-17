@@ -62,7 +62,9 @@ export default function ResultsDisplay({
             {currentIssue.estimate === suggested ? t('estimateSet') : t('setEstimateTo', { value: suggested })}
           </button>
         )}
-        <span className="text-slate-400 text-sm ml-auto">{t('votesCount', { count: revealed.length })}</span>
+        <span className="text-slate-400 text-sm ml-auto">
+          {t(revealed.length === 1 ? 'voteCountOne' : 'votesCount', { count: revealed.length })}
+        </span>
       </div>
 
       {/* Distribution bars */}

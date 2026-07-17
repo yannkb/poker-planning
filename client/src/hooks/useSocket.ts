@@ -58,6 +58,7 @@ export function useSocket() {
     [emit],
   )
 
+  const rename = useCallback((name: string) => emit('rename', { name }), [emit])
   const castVote = useCallback((vote: string | null) => emit('cast-vote', { vote }), [emit])
   const revealVotes = useCallback(() => emit('reveal-votes'), [emit])
   const newRound = useCallback(() => emit('new-round'), [emit])
@@ -101,7 +102,7 @@ export function useSocket() {
   return {
     room, myId, me, isFacilitator, error, kicked,
     clearError, setKicked,
-    createRoom, joinRoom,
+    createRoom, joinRoom, rename,
     castVote, revealVotes, newRound,
     addIssue, selectIssue, setEstimate, changeDeck,
     kickParticipant, toggleObserver,

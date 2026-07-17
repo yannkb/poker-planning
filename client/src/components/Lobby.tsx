@@ -47,7 +47,7 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
+    <main className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
       <div className="absolute top-4 right-4">
         <LangSwitcher />
       </div>
@@ -61,10 +61,12 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
 
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
         {/* Tabs */}
-        <div className="flex border-b border-slate-800">
+        <div role="tablist" aria-label={t('tagline')} className="flex border-b border-slate-800">
           {(['create', 'join'] as const).map((key) => (
             <button
               key={key}
+              role="tab"
+              aria-selected={tab === key}
               onClick={() => {
                 setTab(key)
                 clearError()
@@ -83,7 +85,10 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
 
         <div className="p-6">
           {error && (
-            <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
+            <div
+              role="alert"
+              className="mb-4 bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm"
+            >
               {error}
             </div>
           )}
@@ -91,13 +96,14 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
           {tab === 'create' ? (
             <form onSubmit={handleCreate} className="space-y-4">
               <Field label={t('yourName')} required>
-                <Input value={hostName} onChange={setHostName} placeholder={t('phHostName')} autoFocus />
+                <Input name="hostName" value={hostName} onChange={setHostName} placeholder={t('phHostName')} autoFocus />
               </Field>
               <Field label={t('sessionName')}>
-                <Input value={sessionName} onChange={setSessionName} placeholder={t('phSession')} />
+                <Input name="sessionName" value={sessionName} onChange={setSessionName} placeholder={t('phSession')} />
               </Field>
               <Field label={t('cardDeck')}>
                 <select
+                  name="deck"
                   value={deck}
                   onChange={(e) => setDeck(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-100 focus:outline-none focus:border-brand-500"
@@ -120,10 +126,11 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
           ) : (
             <form onSubmit={handleJoin} className="space-y-4">
               <Field label={t('yourName')} required>
-                <Input value={playerName} onChange={setPlayerName} placeholder={t('phPlayerName')} autoFocus />
+                <Input name="playerName" value={playerName} onChange={setPlayerName} placeholder={t('phPlayerName')} autoFocus />
               </Field>
               <Field label={t('roomCode')} required>
                 <Input
+                  name="roomCode"
                   value={roomCode}
                   onChange={(v) => setRoomCode(v.toUpperCase())}
                   placeholder={t('phCode')}
@@ -143,37 +150,41 @@ export default function Lobby({ onCreateRoom, onJoinRoom, error, clearError, def
         </div>
       </div>
 
-      <p className="mt-6 text-slate-600 text-xs">{t('shareHint')}</p>
-    </div>
+      <p className="mt-6 text-slate-400 text-xs">{t('shareHint')}</p>
+    </main>
   )
 }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {
+  // Wrapping the control in the <label> implicitly associates the two, so
+  // assistive tech announces every field with its name.
   return (
-    <div>
-      <label className="block text-sm text-slate-300 mb-1.5">
+    <label className="block">
+      <span className="block text-sm text-slate-300 mb-1.5">
         {label}
         {required && <span className="text-red-400 ml-0.5">*</span>}
-      </label>
+      </span>
       {children}
-    </div>
+    </label>
   )
 }
 
 interface InputProps {
   value: string
   onChange: (value: string) => void
+  name?: string
   placeholder?: string
   autoFocus?: boolean
   maxLength?: number
   className?: string
 }
 
-function Input({ value, onChange, placeholder, autoFocus, maxLength, className = '' }: InputProps) {
+function Input({ value, onChange, name, placeholder, autoFocus, maxLength, className = '' }: InputProps) {
   return (
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      name={name}
       placeholder={placeholder}
       autoFocus={autoFocus}
       maxLength={maxLength}

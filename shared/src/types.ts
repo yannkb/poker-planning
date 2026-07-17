@@ -1,6 +1,9 @@
 import type { DeckKey } from './decks'
 import type { VoteStats } from './stats'
 
+/** Longest display name a participant may set; enforced server-side. */
+export const MAX_NAME_LENGTH = 40
+
 export interface Participant {
   id: string
   name: string
@@ -86,6 +89,7 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
   'create-room': (payload: { name?: string; facilitatorName?: string; deck?: string }) => void
   'join-room': (payload: { roomId?: string; playerName?: string }) => void
+  rename: (payload: { name?: string }) => void
   'cast-vote': (payload: { vote: string | null }) => void
   'reveal-votes': () => void
   'new-round': () => void

@@ -238,6 +238,10 @@ io.on('connection', (socket) => {
     if (result) io.sockets.sockets.get(result.kickedId)?.emit('kicked')
   })
 
+  socket.on('rename', ({ name } = {}) => {
+    handleRoomAction(socket, (roomId) => gm.renameParticipant({ roomId, playerId: socket.id, name }))
+  })
+
   socket.on('toggle-observer', () => {
     handleRoomAction(socket, (roomId) => gm.toggleObserver({ roomId, playerId: socket.id }))
   })

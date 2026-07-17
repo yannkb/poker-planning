@@ -14,9 +14,12 @@ import {
 } from 'planning-poker-shared'
 import { gifUrl, THROWABLE_EMOJIS } from '../lib/reactions'
 import { MEME_QUOTES, RESULT_QUIPS, pickFrom, useI18n, type QuipCategory } from '../lib/i18n'
+import type { SubscribeFn } from '../hooks/useSocket'
 import TruncatedText from './TruncatedText'
 
 const EmojiPickerPanel = lazy(() => import('./EmojiPickerPanel'))
+
+const GIF_BUBBLE_MS = 5000
 
 // Seats are placed on an ellipse; "me" always sits at the bottom center.
 const ELLIPSE_RX = 42
@@ -74,21 +77,52 @@ interface PokerTableProps {
   onNewRound: () => void
   onKick: (targetId: string) => void
   onThrowEmoji: (targetId: string, emoji: string) => void
-  flyingEmojis: EmojiThrownEvent[]
-  onEmojiDone: (id: string) => void
-  gifBubbles: Record<string, GifReactionEvent>
+  subscribe: SubscribeFn
 }
 
 export default function PokerTable({
   participants, myId, isVoting, isRevealed, isFacilitator,
   currentIssue, votedCount, voterCount, hasIssues, deckValues, roundSeed,
   onReveal, onNewRound, onKick,
-  onThrowEmoji,
-  flyingEmojis, onEmojiDone,
-  gifBubbles,
+  onThrowEmoji, subscribe,
 }: PokerTableProps) {
   const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement | null>(null)
+
+  // Transient reaction state, owned here so emoji/GIF events re-render only the
+  // table — not the results panel, issue queue, or voting cards above.
+  const [flyingEmojis, setFlyingEmojis] = useState<EmojiThrownEvent[]>([])
+  const [gifBubbles, setGifBubbles] = useState<Record<string, GifReactionEvent>>({})
+  const gifTimeouts = useRef(new Set<ReturnType<typeof setTimeout>>())
+  const onEmojiDone = useCallback(
+    (id: string) => setFlyingEmojis((prev) => prev.filter((f) => f.id !== id)),
+    [],
+  )
+
+  useEffect(() => {
+    const timeouts = gifTimeouts.current
+    const offEmoji = subscribe('emoji-thrown', (event) => {
+      setFlyingEmojis((prev) => [...prev.slice(-19), event])
+    })
+    const offGif = subscribe('gif-reaction', (event) => {
+      setGifBubbles((prev) => ({ ...prev, [event.fromId]: event }))
+      const timeout = setTimeout(() => {
+        timeouts.delete(timeout)
+        setGifBubbles((prev) => {
+          if (prev[event.fromId]?.id !== event.id) return prev
+          const { [event.fromId]: _expired, ...rest } = prev
+          return rest
+        })
+      }, GIF_BUBBLE_MS)
+      timeouts.add(timeout)
+    })
+    return () => {
+      offEmoji()
+      offGif()
+      timeouts.forEach(clearTimeout)
+      timeouts.clear()
+    }
+  }, [subscribe])
   const seatRefs = useRef(new Map<string, HTMLDivElement>())
   const [hitSeats, setHitSeats] = useState<ReadonlySet<string>>(() => new Set())
   // Clicking a teammate's seat opens an emoji flyout above them
@@ -109,6 +143,18 @@ export default function PokerTable({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [flyoutTargetId, fullPickerTargetId])
+
+  // Return focus to whatever opened the full emoji picker once it closes,
+  // so keyboard users aren't dumped back at the top of the document.
+  const restoreFocusRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (fullPickerTargetId) {
+      restoreFocusRef.current = document.activeElement as HTMLElement | null
+    } else if (restoreFocusRef.current) {
+      restoreFocusRef.current.focus?.()
+      restoreFocusRef.current = null
+    }
+  }, [fullPickerTargetId])
 
   const quickEmojis = useMemo(
     () => [
@@ -253,7 +299,12 @@ export default function PokerTable({
           className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 rounded-3xl"
           onClick={() => setFullPickerTargetId(null)}
         >
-          <div onClick={(e) => e.stopPropagation()}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('moreEmojis')}
+            onClick={(e) => e.stopPropagation()}
+          >
             <Suspense
               fallback={
                 <div className="bg-slate-900 border border-slate-700 rounded-2xl px-6 py-4 text-sm text-slate-400 shadow-2xl">
@@ -455,11 +506,26 @@ function Seat({
     >
       <div
         role={isMe ? undefined : 'button'}
+        tabIndex={isMe ? undefined : 0}
+        aria-label={isMe ? undefined : t('reactTo', { name: p.name })}
+        aria-haspopup={isMe ? undefined : 'true'}
+        aria-expanded={isMe ? undefined : flyoutOpen}
         title={isMe ? undefined : t('reactTo', { name: p.name })}
         onClick={isMe ? undefined : onToggleFlyout}
+        onKeyDown={
+          isMe
+            ? undefined
+            : (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onToggleFlyout()
+                }
+              }
+        }
         className={[
           'group relative flex flex-col items-center gap-1 w-20 rounded-xl',
           isMe ? '' : 'cursor-pointer hover:bg-slate-800/40 transition-colors',
+          isMe ? '' : 'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400',
           hit ? 'animate-seat-shake' : '',
         ].join(' ')}
       >
@@ -525,10 +591,11 @@ function Seat({
               e.stopPropagation()
               onKick(p.id)
             }}
-            className="absolute -top-1 -right-1 z-20 w-5 h-5 rounded-full bg-slate-800 border border-slate-600 text-slate-400 hover:text-red-400 hover:border-red-400/60 text-[10px] leading-none opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute -top-1 -right-1 z-20 w-5 h-5 rounded-full bg-slate-800 border border-slate-600 text-slate-400 hover:text-red-400 hover:border-red-400/60 text-[10px] leading-none opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
             title={t('removeParticipant', { name: p.name })}
+            aria-label={t('removeParticipant', { name: p.name })}
           >
-            ✕
+            <span aria-hidden="true">✕</span>
           </button>
         )}
       </div>
@@ -561,16 +628,18 @@ function EmojiFlyout({ emojis, onPick, onMore, below }: EmojiFlyoutProps) {
             onClick={() => onPick(emoji)}
             className="text-lg leading-none p-1 rounded-full transition-transform hover:scale-125"
             title={t('throwEmoji', { emoji })}
+            aria-label={t('throwEmoji', { emoji })}
           >
-            {emoji}
+            <span aria-hidden="true">{emoji}</span>
           </button>
         ))}
         <button
           onClick={onMore}
           className="text-sm leading-none p-1 rounded-full text-slate-400 hover:text-slate-200 transition-transform hover:scale-125"
           title={t('moreEmojis')}
+          aria-label={t('moreEmojis')}
         >
-          ➕
+          <span aria-hidden="true">➕</span>
         </button>
       </div>
       {!below && <PopoverArrow />}

@@ -54,3 +54,23 @@
     opacity: 0;
   }
 }
+
+/* Respect users who prefer reduced motion: neutralize the decorative
+   animations (projectile fly/splat, seat shake, card flip, bounce/pulse).
+   Thrown emojis still appear at the target, they just don't fly or splat. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .emoji-projectile {
+    animation: none !important;
+    transform: translate(var(--tx), var(--ty)) !important;
+    opacity: 1;
+  }
+}

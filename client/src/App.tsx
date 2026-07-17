@@ -42,10 +42,17 @@ export default function App() {
       <>
         {socket.error && (
           <div
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-900/90 border border-red-500/50 text-red-200 px-5 py-3 rounded-xl shadow-xl text-sm cursor-pointer"
-            onClick={socket.clearError}
+            role="alert"
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-red-900/90 border border-red-500/50 text-red-200 px-5 py-3 rounded-xl shadow-xl text-sm"
           >
-            ⚠ {socket.error} <span className="ml-2 opacity-60">✕</span>
+            <span aria-hidden="true">⚠</span> {socket.error}
+            <button
+              onClick={socket.clearError}
+              aria-label={t('dismiss')}
+              className="ml-2 opacity-60 hover:opacity-100 transition-opacity"
+            >
+              <span aria-hidden="true">✕</span>
+            </button>
           </div>
         )}
         <GameBoard
@@ -62,6 +69,7 @@ export default function App() {
           onChangeDeck={socket.changeDeck}
           onKick={socket.kickParticipant}
           onToggleObserver={socket.toggleObserver}
+          onRename={socket.rename}
           onThrowEmoji={socket.throwEmoji}
           onSendGif={socket.sendGif}
           subscribe={socket.subscribe}
@@ -73,7 +81,10 @@ export default function App() {
   return (
     <>
       {socket.kicked && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-900/90 border border-red-500/50 text-red-200 px-5 py-3 rounded-xl shadow-xl text-sm">
+        <div
+          role="status"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-900/90 border border-red-500/50 text-red-200 px-5 py-3 rounded-xl shadow-xl text-sm"
+        >
           {t('kicked')}
         </div>
       )}

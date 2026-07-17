@@ -1,15 +1,18 @@
 interface VotingCardProps {
   value: string
   selected: boolean
+  shortcut?: string
   onClick: () => void
 }
 
-export default function VotingCard({ value, selected, onClick }: VotingCardProps) {
+export default function VotingCard({ value, selected, shortcut, onClick }: VotingCardProps) {
   const isSpecial = value === '?' || value === '☕'
 
   return (
     <button
       onClick={onClick}
+      aria-pressed={selected}
+      title={shortcut ? `${value} · ${shortcut}` : value}
       className={[
         'relative flex flex-col items-center justify-center',
         'w-14 h-20 sm:w-16 sm:h-24 rounded-xl border-2 font-bold text-lg sm:text-xl',
@@ -21,6 +24,14 @@ export default function VotingCard({ value, selected, onClick }: VotingCardProps
       ].join(' ')}
     >
       <span>{value}</span>
+      {shortcut && (
+        <span
+          aria-hidden="true"
+          className="absolute bottom-1 right-1.5 text-[10px] font-normal leading-none text-slate-500 hidden sm:block"
+        >
+          {shortcut}
+        </span>
+      )}
       {selected && (
         <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-brand-500 rounded-full border-2 border-slate-950" />
       )}

@@ -4,6 +4,7 @@ import {
   DECKS,
   DEFAULT_DECK,
   isDeckKey,
+  MAX_NAME_LENGTH,
   type Issue,
   type Participant,
   type Room,
@@ -190,6 +191,17 @@ export function kickParticipant(args: { roomId: string; playerId: string; target
   if (denied) return denied
   room.participants = room.participants.filter((p) => p.id !== args.targetId)
   return { room, kickedId: args.targetId }
+}
+
+export function renameParticipant(args: { roomId: string; playerId: string; name?: string }): RoomResult {
+  const room = rooms.get(args.roomId)
+  if (!room) return { error: 'Room not found' }
+  const participant = findParticipant(room, args.playerId)
+  if (!participant) return { error: 'Participant not found' }
+  const name = args.name?.trim().slice(0, MAX_NAME_LENGTH)
+  if (!name) return { error: 'Name is required' }
+  participant.name = name
+  return { room }
 }
 
 export function toggleObserver(args: { roomId: string; playerId: string }): RoomResult {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 
 interface TruncatedTextProps {
@@ -19,6 +19,7 @@ interface Tip {
 // by an ancestor's overflow:hidden (issue list, header, table center).
 export default function TruncatedText({ text, className = '', lines = 1 }: TruncatedTextProps) {
   const ref = useRef<HTMLSpanElement | null>(null)
+  const tooltipId = useId()
   const [overflowing, setOverflowing] = useState(false)
   const [tip, setTip] = useState<Tip | null>(null)
 
@@ -76,6 +77,7 @@ export default function TruncatedText({ text, className = '', lines = 1 }: Trunc
         className={[lines > 1 ? '' : 'truncate', className].filter(Boolean).join(' ')}
         style={style}
         tabIndex={overflowing ? 0 : undefined}
+        aria-describedby={tip ? tooltipId : undefined}
         onPointerEnter={show}
         onPointerLeave={hide}
         onFocus={show}
@@ -87,6 +89,7 @@ export default function TruncatedText({ text, className = '', lines = 1 }: Trunc
         createPortal(
           <div
             role="tooltip"
+            id={tooltipId}
             className="pointer-events-none fixed z-[60] max-w-xs whitespace-normal break-words rounded-lg border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-100 shadow-xl"
             style={{
               left: tip.left,

@@ -101,13 +101,32 @@ function IssueRow({ issue, isActive, isFacilitator, onSelect, onSetEstimate }: I
     setEditing(false)
   }
 
+  const selectable = isFacilitator && !isActive
+
   return (
     <div
-      onClick={onSelect}
+      onClick={selectable ? onSelect : undefined}
+      role={selectable ? 'button' : undefined}
+      tabIndex={selectable ? 0 : undefined}
+      onKeyDown={
+        selectable
+          ? (e) => {
+              // Only react to keys on the row itself, not ones bubbling up from
+              // the nested estimate-edit form (where Enter must submit, not select).
+              if (e.target !== e.currentTarget) return
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onSelect()
+              }
+            }
+          : undefined
+      }
       className={[
         'rounded-lg px-3 py-2 text-sm transition-colors',
         isActive ? 'bg-brand-500/15 border border-brand-500/40' : 'bg-slate-800/60 border border-transparent',
-        isFacilitator && !isActive ? 'cursor-pointer hover:bg-slate-700/60' : '',
+        selectable
+          ? 'cursor-pointer hover:bg-slate-700/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400'
+          : '',
       ].join(' ')}
     >
       <div className="flex items-center gap-2">

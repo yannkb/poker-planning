@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 
 const LANG_KEY = 'pp-lang'
 
@@ -28,6 +28,7 @@ const en = {
   shareHint: 'Share the room code with your team to invite them.',
   defaultSessionName: 'Planning Session',
   kicked: 'You were removed from the room.',
+  dismiss: 'Dismiss',
   room: 'Room:',
   clickToCopy: '(click to copy link)',
   copied: '✓ Copied!',
@@ -62,6 +63,9 @@ const en = {
   results: 'Results',
   observingNote: 'You are observing this round.',
   you: ' (you)',
+  editName: 'Edit your name',
+  renameTitle: 'Change your name',
+  nameTooLong: 'Name is too long',
   clickPlayerHint: 'Click a player to throw an emoji at them',
   gifTitle: 'Send a GIF reaction',
   searchGiphy: 'Search GIFs…',
@@ -82,6 +86,7 @@ const en = {
   estimatePh: 'Estimate…',
   noVotesCast: 'No votes cast this round.',
   votesCount: '{count} votes',
+  voteCountOne: '{count} vote',
   deck_fibonacci: 'Fibonacci',
   deck_modified_fibonacci: 'Modified Fibonacci',
   deck_tshirt: 'T-Shirt Sizes',
@@ -108,6 +113,7 @@ const fr: Record<MessageKey, string> = {
   shareHint: 'Partagez le code du salon avec votre équipe.',
   defaultSessionName: 'Session de planning',
   kicked: 'Vous avez été exclu du salon.',
+  dismiss: 'Fermer',
   room: 'Salon :',
   clickToCopy: '(cliquez pour copier le lien)',
   copied: '✓ Copié !',
@@ -142,6 +148,9 @@ const fr: Record<MessageKey, string> = {
   results: 'Résultats',
   observingNote: 'Vous observez cette manche.',
   you: ' (vous)',
+  editName: 'Modifier votre nom',
+  renameTitle: 'Changer de nom',
+  nameTooLong: 'Nom trop long',
   clickPlayerHint: 'Cliquez sur un joueur pour lui lancer un emoji',
   gifTitle: 'Envoyer une réaction GIF',
   searchGiphy: 'Rechercher un GIF…',
@@ -162,6 +171,7 @@ const fr: Record<MessageKey, string> = {
   estimatePh: 'Estimation…',
   noVotesCast: 'Aucun vote pour cette manche.',
   votesCount: '{count} votes',
+  voteCountOne: '{count} vote',
   deck_fibonacci: 'Fibonacci',
   deck_modified_fibonacci: 'Fibonacci modifié',
   deck_tshirt: 'Tailles de T-shirt',
@@ -344,6 +354,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       // localStorage unavailable — language just won't persist
     }
   }, [])
+
+  // Keep the document language in sync so assistive tech and search engines
+  // announce/read the page in the active locale.
+  useEffect(() => {
+    document.documentElement.lang = lang
+  }, [lang])
 
   const t = useCallback<TranslateFn>(
     (key, vars) => {

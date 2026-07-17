@@ -12,22 +12,31 @@ export default function ReactionBar({ onSendGif }: ReactionBarProps) {
   const [gifOpen, setGifOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
-  // Close the picker on outside click
+  // Close the picker on outside click or Escape
   useEffect(() => {
     if (!gifOpen) return
     const onPointerDown = (e: PointerEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setGifOpen(false)
     }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setGifOpen(false)
+    }
     document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
   }, [gifOpen])
 
   return (
     <div ref={rootRef} className="relative flex items-center gap-3">
-      <p className="text-xs text-slate-600">{t('clickPlayerHint')}</p>
+      <p className="text-xs text-slate-400">{t('clickPlayerHint')}</p>
 
       <button
         onClick={() => setGifOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={gifOpen}
         className={[
           'text-xs font-bold px-3 py-1.5 rounded-full border transition-colors',
           gifOpen
@@ -99,20 +108,27 @@ function GifPicker({ onPick }: { onPick: (gif: string) => void }) {
   }, [query])
 
   return (
-    <div className="absolute bottom-full right-0 mb-2 z-40 w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-2.5">
+    <div
+      role="dialog"
+      aria-label={t('gifTitle')}
+      className="absolute bottom-full right-0 mb-2 z-40 w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-2.5"
+    >
       <input
         autoFocus
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={t('searchGiphy')}
+        aria-label={t('searchGiphy')}
         className="w-full mb-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500"
       />
 
-      {status === 'unconfigured' && (
-        <p className="text-xs text-amber-400/80 px-1 pb-2">{t('gifUnconfigured')}</p>
-      )}
-      {status === 'error' && <p className="text-xs text-red-400/80 px-1 pb-2">{t('gifError')}</p>}
-      {status === 'loading' && <p className="text-xs text-slate-500 px-1 pb-2">{t('searching')}</p>}
+      <div role="status" aria-live="polite">
+        {status === 'unconfigured' && (
+          <p className="text-xs text-amber-400/80 px-1 pb-2">{t('gifUnconfigured')}</p>
+        )}
+        {status === 'error' && <p className="text-xs text-red-400/80 px-1 pb-2">{t('gifError')}</p>}
+        {status === 'loading' && <p className="text-xs text-slate-400 px-1 pb-2">{t('searching')}</p>}
+      </div>
 
       <div className="grid grid-cols-3 gap-1.5 max-h-56 overflow-y-auto">
         {results === null ? (
