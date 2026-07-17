@@ -127,6 +127,16 @@ function GifPicker({ onPick }: { onPick: (gif: string) => void }) {
           ))
         )}
       </div>
+
+      {/* GIPHY attribution mark — required wherever GIPHY content is displayed */}
+      <a
+        href="https://giphy.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-2 flex justify-center"
+      >
+        <img src="/powered-by-giphy.png" alt="Powered by GIPHY" className="h-4 w-auto" />
+      </a>
     </div>
   )
 }
